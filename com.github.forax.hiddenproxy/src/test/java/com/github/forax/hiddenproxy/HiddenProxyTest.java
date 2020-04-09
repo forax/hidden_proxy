@@ -180,4 +180,28 @@ public class HiddenProxyTest {
     var proxy = (Bar)constructor.invoke();
     assertEquals(84, proxy.multiplyBy2(42));
   }
+
+  interface HelloProxy {
+    String hello(String text);
+  }
+  static class Impl {
+    static String implementation(int repeated, String text) {
+      return text.repeat(repeated);
+    }
+  }
+  @Test
+  public void defineProxySimpleDelegation() throws Throwable {
+    var linker = (InvocationLinker)(lookup, methodInfo) -> {
+      return switch(methodInfo.getName()) {
+        case "hello" -> MethodHandles.dropArguments(
+            lookup.findStatic(Impl.class, "implementation", methodType(String.class, int.class, String.class)),
+            0, HelloProxy.class);
+        default -> fail("unknown method " + methodInfo);
+      };
+    };
+    var constructor = HiddenProxy
+        .defineProxy(MethodHandles.lookup(), HelloProxy.class, int.class, linker);
+    var proxy = (HelloProxy)constructor.invoke(2);
+    assertEquals("proxyproxy", proxy.hello("proxy"));
+  }
 }
