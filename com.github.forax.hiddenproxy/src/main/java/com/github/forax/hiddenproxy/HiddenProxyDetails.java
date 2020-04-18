@@ -19,8 +19,9 @@ import static org.objectweb.asm.Opcodes.PUTFIELD;
 import static org.objectweb.asm.Opcodes.RETURN;
 import static org.objectweb.asm.Opcodes.V15;
 
-import java.io.IOException;
+import com.github.forax.hiddenproxy.HiddenProxy.InvocationLinker;
 import java.lang.constant.MethodTypeDesc;
+import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.reflect.Modifier;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
@@ -67,8 +68,9 @@ class HiddenProxyDetails {
     mv.visitEnd();
   }
 
-  static byte[] generateProxyByteArray(Class<?> lookupClass, Class<?> interfaceType, Class<?> delegateClass) {
-    var proxyName = proxyName(lookupClass);
+  static byte[] generateProxyByteArray(Lookup lookup, Class<?> interfaceType, Class<?> delegateClass, InvocationLinker linker)
+      throws IllegalAccessException {
+    var proxyName = proxyName(lookup.lookupClass());
     var delegate = delegateClass == void.class? null: Type.getType(delegateClass);
     var interfaceName = interfaceType.getName().replace('.', '/');
 
@@ -102,8 +104,18 @@ class HiddenProxyDetails {
     generateMethod(writer, interfaceName, delegate, proxyName, "toString", "()Ljava/lang/String;");
 
     for(var method: interfaceType.getMethods()) {
-      if (!Modifier.isAbstract(method.getModifiers())) {   // filter out static or default method
+      var modifiers = method.getModifiers();
+      if (Modifier.isStatic(modifiers)) {   // filter out static  method
         continue;
+      }
+
+      // do access check early
+      var mh = lookup.unreflect(method);
+
+      if (!Modifier.isAbstract(modifiers)) {  // default method
+        if (!linker.overrideDefaultMethod(lookup.revealDirect(mh))) {
+          continue;  // should not be overridden
+        }
       }
 
       var methodName = method.getName();

@@ -1,6 +1,8 @@
 package com.github.forax.hiddenproxy;
 
 import static java.lang.invoke.MethodHandleInfo.REF_invokeInterface;
+import static java.lang.invoke.MethodHandles.constant;
+import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodType.methodType;
 import static java.lang.reflect.Modifier.isAbstract;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -10,7 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.github.forax.hiddenproxy.HiddenProxy.InvocationLinker;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodHandles.Lookup;
 import java.time.LocalDate;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntSupplier;
@@ -91,7 +96,7 @@ public class HiddenProxyTest {
   public void defineProxyOfIntBinaryOperator() throws Throwable {
     var sum = MethodHandles.lookup()
         .findStatic(Integer.class, "sum", methodType(int.class, int.class, int.class));
-    var target = MethodHandles.dropArguments(sum, 0, IntBinaryOperator.class);
+    var target = dropArguments(sum, 0, IntBinaryOperator.class);
 
     var linker = (InvocationLinker)(lookup, methodInfo) -> {
       assertTrue(lookup.lookupClass().isHidden());
@@ -121,7 +126,7 @@ public class HiddenProxyTest {
     var delegate = (Hello)text -> "* " + text + " *";
     var linker = (InvocationLinker)(lookup, methodInfo) -> {
       var target = lookup.findVirtual(methodInfo.getDeclaringClass(), methodInfo.getName(), methodInfo.getMethodType());
-      return MethodHandles.dropArguments(target, 0, Hello.class);
+      return dropArguments(target, 0, Hello.class);
     };
     var constructor = HiddenProxy
         .defineProxy(MethodHandles.lookup(), Hello.class, Hello.class, linker);
@@ -141,11 +146,11 @@ public class HiddenProxyTest {
   public void defineDelegatingProxyPrimitive() throws Throwable {
     var linker = (InvocationLinker)(lookup, methodInfo) -> {
       return switch(methodInfo.getName()) {
-        case "getAsInt", "hashCode" -> MethodHandles.dropArguments(MethodHandles.identity(int.class), 0, IntSupplier.class);
-        case "equals" -> MethodHandles.dropArguments(
+        case "getAsInt", "hashCode" -> dropArguments(MethodHandles.identity(int.class), 0, IntSupplier.class);
+        case "equals" -> dropArguments(
             lookup.findStatic(HiddenProxyTest.class, "same", methodType(boolean.class, Object.class, Object.class)),
             1, int.class);
-        case "toString" -> MethodHandles.dropArguments(MethodHandles.constant(String.class, "proxy"), 0, IntSupplier.class, int.class);
+        case "toString" -> dropArguments(constant(String.class, "proxy"), 0, IntSupplier.class, int.class);
         default -> fail("unknown method " + methodInfo);
       };
     };
@@ -171,7 +176,7 @@ public class HiddenProxyTest {
   public void defineProxyDefaultMethod() throws Throwable {
     var linker = (InvocationLinker)(lookup, methodInfo) -> {
       return switch(methodInfo.getName()) {
-        case "compute" -> MethodHandles.dropArguments(MethodHandles.identity(int.class), 0, methodInfo.getDeclaringClass());
+        case "compute" -> dropArguments(MethodHandles.identity(int.class), 0, methodInfo.getDeclaringClass());
         default -> fail("unknown method " + methodInfo);
       };
     };
@@ -193,7 +198,7 @@ public class HiddenProxyTest {
   public void defineProxySimpleDelegation() throws Throwable {
     var linker = (InvocationLinker)(lookup, methodInfo) -> {
       return switch(methodInfo.getName()) {
-        case "hello" -> MethodHandles.dropArguments(
+        case "hello" -> dropArguments(
             lookup.findStatic(Impl.class, "implementation", methodType(String.class, int.class, String.class)),
             0, HelloProxy.class);
         default -> fail("unknown method " + methodInfo);
@@ -203,5 +208,43 @@ public class HiddenProxyTest {
         .defineProxy(MethodHandles.lookup(), HelloProxy.class, int.class, linker);
     var proxy = (HelloProxy)constructor.invoke(2);
     assertEquals("proxyproxy", proxy.hello("proxy"));
+  }
+
+  interface InterfaceWithDefaultMethod {
+    default int defaultFoo() { return 64; }
+  }
+
+  @Test
+  public void defineProxyDoNotOverrideDefaultMethod() throws Throwable {
+    var linker = (InvocationLinker)(lookup, methodInfo) -> fail();
+    var constructor = HiddenProxy
+        .defineProxy(MethodHandles.lookup(), InterfaceWithDefaultMethod.class, void.class, linker);
+    var proxy = (InterfaceWithDefaultMethod)constructor.invoke();
+    assertEquals(64, proxy.defaultFoo());
+  }
+
+  @Test
+  public void defineProxyDoOverrideDefaultMethod() throws Throwable {
+    var linker = new InvocationLinker() {
+      @Override
+      public boolean overrideDefaultMethod(MethodHandleInfo methodInfo) {
+        assertEquals(InterfaceWithDefaultMethod.class, methodInfo.getDeclaringClass());
+        assertEquals("defaultFoo", methodInfo.getName());
+        assertEquals(methodType(int.class), methodInfo.getMethodType());
+        return true;
+      }
+
+      @Override
+      public MethodHandle link(Lookup lookup, MethodHandleInfo methodInfo) {
+        assertEquals(InterfaceWithDefaultMethod.class, methodInfo.getDeclaringClass());
+        assertEquals("defaultFoo", methodInfo.getName());
+        assertEquals(methodType(int.class), methodInfo.getMethodType());
+        return dropArguments(constant(int.class, 42), 0, methodInfo.getDeclaringClass());
+        }
+    };
+    var constructor = HiddenProxy
+        .defineProxy(MethodHandles.lookup(), InterfaceWithDefaultMethod.class, void.class, linker);
+    var proxy = (InterfaceWithDefaultMethod)constructor.invoke();
+    assertEquals(42, proxy.defaultFoo());
   }
 }

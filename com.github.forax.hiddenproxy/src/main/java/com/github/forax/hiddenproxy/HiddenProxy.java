@@ -41,12 +41,27 @@ import java.util.stream.Stream;
 public interface HiddenProxy {
 
   /**
-   * A linker of all the abstract methods of an interface.
+   * A linker of all the methods of an interface. For each method of the proxy interface, the method
+   * {@link #link(Lookup, MethodHandleInfo)} is called to get the corresponding implementation as a
+   * method handle the first time the abstract method is called. For a default method, the method
+   * {@link #overrideDefaultMethod(MethodHandleInfo)} will be called before {@link #link(Lookup,
+   * MethodHandleInfo)} to know if the method is overridden by the proxy or not.
    *
    * @see #defineProxy(Lookup, Class, Class, InvocationLinker, ProxyOption...)
    */
   @FunctionalInterface
   interface InvocationLinker {
+
+    /**
+     * This method is called once per default method to know if the proxy should override the method
+     * or not.
+     *
+     * @implNote this implementation always return false.
+     * @param methodInfo a description of the interface method to override.
+     */
+    default boolean overrideDefaultMethod(MethodHandleInfo methodInfo) {
+      return false;
+    }
 
     /**
      * This method is called once per method of the interface to link the implementation of the
@@ -115,13 +130,17 @@ public interface HiddenProxy {
   }
 
   /**
-   * Defines a proxy class in the same package as the lookup that implements an interface and return
-   * a constructor to create objects os that interface.
+   * Defines a proxy class that implements an interface in the same package as the lookup and return
+   * a constructor to create objects of that interface.
    *
-   * <p>The first time an abstract method of the interface is called on the proxy class, the {@link
-   * InvocationLinker linker} will be called to provide an implementation of that abstract method.
-   * All subsequent calls of the same method will always use the implementation provided by the
-   * linker.
+   * For default methods, the proxy first call
+   * the method {@link InvocationLinker#overrideDefaultMethod(MethodHandleInfo)} to know if the
+   * proxy has to provide an implementation or the default method implementation can be used.
+   *
+   * <p>The first time a method of the interface is called on the proxy class, the {@link
+   * InvocationLinker#link(Lookup, MethodHandleInfo)} linker} is called to provide an implementation
+   * of that method. All subsequent calls of the same method will always use the implementation
+   * provided by the linker.
    *
    * <p>By default, the proxy class is garbage collectable if there is no live instance of the proxy
    * class, so the proxy class is not linked to a peculiar class loader. The option {@link
@@ -168,9 +187,15 @@ public interface HiddenProxy {
     }
     var registerInClassLoader = Set.of(proxyOptions).contains(ProxyOption.REGISTER_IN_CLASSLOADER);
 
-    var byteArray =
-        HiddenProxyDetails.generateProxyByteArray(
-            lookup.lookupClass(), interfaceType, delegateClass);
+    byte[] byteArray;
+    try {
+      // check the interface accessibility first to have better error message
+      lookup.accessClass(interfaceType);
+
+      byteArray = HiddenProxyDetails.generateProxyByteArray(lookup, interfaceType, delegateClass, linker);
+    } catch (IllegalAccessException e) { // the lookup can not see the interface / interface methods
+      throw (IllegalAccessError) new IllegalAccessError().initCause(e);
+    }
 
     var hiddenClassOptions =
         Stream.of(NESTMATE, STRONG)
@@ -179,7 +204,7 @@ public interface HiddenProxy {
     Lookup hiddenClassLookup;
     try {
       hiddenClassLookup = lookup.defineHiddenClass(byteArray, true, hiddenClassOptions);
-    } catch (IllegalAccessException e) {
+    } catch (IllegalAccessException e) {  // if the lookup has not full privilege
       throw (IllegalAccessError) new IllegalAccessError().initCause(e);
     }
 
