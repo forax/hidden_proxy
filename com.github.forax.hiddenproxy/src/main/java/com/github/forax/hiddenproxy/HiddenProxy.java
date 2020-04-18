@@ -57,9 +57,11 @@ public interface HiddenProxy {
      * or not.
      *
      * @implNote this implementation always return false.
+     * @param lookup the lookup pass as parameter of {@link #defineProxy(Lookup, Class, Class,
+     *     InvocationLinker, ProxyOption...)}.
      * @param methodInfo a description of the interface method to override.
      */
-    default boolean overrideDefaultMethod(MethodHandleInfo methodInfo) {
+    default boolean overrideDefaultMethod(Lookup lookup, MethodHandleInfo methodInfo) {
       return false;
     }
 
@@ -133,9 +135,9 @@ public interface HiddenProxy {
    * Defines a proxy class that implements an interface in the same package as the lookup and return
    * a constructor to create objects of that interface.
    *
-   * For default methods, the proxy first call
-   * the method {@link InvocationLinker#overrideDefaultMethod(MethodHandleInfo)} to know if the
-   * proxy has to provide an implementation or the default method implementation can be used.
+   * <p>For default methods, the proxy first call the method {@link
+   * InvocationLinker#overrideDefaultMethod(Lookup, MethodHandleInfo)} to know if the proxy has to
+   * provide an implementation or the default method implementation can be used.
    *
    * <p>The first time a method of the interface is called on the proxy class, the {@link
    * InvocationLinker#link(Lookup, MethodHandleInfo)} linker} is called to provide an implementation
@@ -192,7 +194,8 @@ public interface HiddenProxy {
       // check the interface accessibility first to have better error message
       lookup.accessClass(interfaceType);
 
-      byteArray = HiddenProxyDetails.generateProxyByteArray(lookup, interfaceType, delegateClass, linker);
+      byteArray =
+          HiddenProxyDetails.generateProxyByteArray(lookup, interfaceType, delegateClass, linker);
     } catch (IllegalAccessException e) { // the lookup can not see the interface / interface methods
       throw (IllegalAccessError) new IllegalAccessError().initCause(e);
     }
@@ -204,7 +207,7 @@ public interface HiddenProxy {
     Lookup hiddenClassLookup;
     try {
       hiddenClassLookup = lookup.defineHiddenClass(byteArray, true, hiddenClassOptions);
-    } catch (IllegalAccessException e) {  // if the lookup has not full privilege
+    } catch (IllegalAccessException e) { // if the lookup has not full privilege
       throw (IllegalAccessError) new IllegalAccessError().initCause(e);
     }
 

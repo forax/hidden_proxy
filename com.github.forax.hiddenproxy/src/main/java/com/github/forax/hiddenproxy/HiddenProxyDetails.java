@@ -113,7 +113,7 @@ class HiddenProxyDetails {
       var mh = lookup.unreflect(method);
 
       if (!Modifier.isAbstract(modifiers)) {  // default method
-        if (!linker.overrideDefaultMethod(lookup.revealDirect(mh))) {
+        if (!linker.overrideDefaultMethod(lookup, lookup.revealDirect(mh))) {
           continue;  // should not be overridden
         }
       }

@@ -12,10 +12,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import com.github.forax.hiddenproxy.HiddenProxy.InvocationLinker;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodHandles.Lookup;
+import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntSupplier;
@@ -227,7 +232,7 @@ public class HiddenProxyTest {
   public void defineProxyDoOverrideDefaultMethod() throws Throwable {
     var linker = new InvocationLinker() {
       @Override
-      public boolean overrideDefaultMethod(MethodHandleInfo methodInfo) {
+      public boolean overrideDefaultMethod(Lookup lookup, MethodHandleInfo methodInfo) {
         assertEquals(InterfaceWithDefaultMethod.class, methodInfo.getDeclaringClass());
         assertEquals("defaultFoo", methodInfo.getName());
         assertEquals(methodType(int.class), methodInfo.getMethodType());
@@ -246,5 +251,38 @@ public class HiddenProxyTest {
         .defineProxy(MethodHandles.lookup(), InterfaceWithDefaultMethod.class, void.class, linker);
     var proxy = (InterfaceWithDefaultMethod)constructor.invoke();
     assertEquals(42, proxy.defaultFoo());
+  }
+
+  @Target(ElementType.METHOD)
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface OverriddenByProxy {
+    // empty
+  }
+  interface InterfaceWithDefaultMethodAnnotated {
+    @OverriddenByProxy
+    default String defaultFoo() { return "default"; }
+    // not annotated
+    default String defaultBar() { return "default"; }
+  }
+
+  @Test
+  public void defineProxyOverrideAnnotatedDefaultMethod() throws Throwable {
+    var linker = new InvocationLinker() {
+      @Override
+      public boolean overrideDefaultMethod(Lookup lookup, MethodHandleInfo methodInfo) {
+        var method = methodInfo.reflectAs(Method.class, lookup);
+        return method.isAnnotationPresent(OverriddenByProxy.class);
+      }
+
+      @Override
+      public MethodHandle link(Lookup lookup, MethodHandleInfo methodInfo) {
+        return dropArguments(constant(String.class, "overridden"), 0, methodInfo.getDeclaringClass());
+      }
+    };
+    var constructor = HiddenProxy
+        .defineProxy(MethodHandles.lookup(), InterfaceWithDefaultMethodAnnotated.class, void.class, linker);
+    var proxy = (InterfaceWithDefaultMethodAnnotated)constructor.invoke();
+    assertEquals("overridden", proxy.defaultFoo());
+    assertEquals("default", proxy.defaultBar());
   }
 }
