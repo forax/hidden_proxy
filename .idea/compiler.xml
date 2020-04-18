@@ -7,7 +7,6 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="com.github.forax.hiddenproxy" />
-        <module name="hidden_proxy" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>

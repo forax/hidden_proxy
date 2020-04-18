@@ -1,24 +1,30 @@
 package com.github.forax.hiddenproxy;
 
-import java.io.IOException;
-import java.lang.constant.MethodTypeDesc;
-import org.objectweb.asm.AnnotationVisitor;
-import org.objectweb.asm.Attribute;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.FieldVisitor;
-import org.objectweb.asm.Handle;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.TypePath;
-
 import static java.lang.constant.ConstantDescs.CD_CallSite;
-import static java.lang.constant.ConstantDescs.CD_Class;
 import static java.lang.constant.ConstantDescs.CD_MethodHandles_Lookup;
 import static java.lang.constant.ConstantDescs.CD_MethodType;
 import static java.lang.constant.ConstantDescs.CD_String;
-import static org.objectweb.asm.Opcodes.*;
+import static java.lang.invoke.MethodType.methodType;
+import static org.objectweb.asm.Opcodes.ACC_FINAL;
+import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
+import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static org.objectweb.asm.Opcodes.ACC_SUPER;
+import static org.objectweb.asm.Opcodes.ALOAD;
+import static org.objectweb.asm.Opcodes.GETFIELD;
+import static org.objectweb.asm.Opcodes.H_INVOKESTATIC;
+import static org.objectweb.asm.Opcodes.ILOAD;
+import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.IRETURN;
+import static org.objectweb.asm.Opcodes.PUTFIELD;
+import static org.objectweb.asm.Opcodes.RETURN;
+import static org.objectweb.asm.Opcodes.V15;
+
+import java.io.IOException;
+import java.lang.constant.MethodTypeDesc;
+import java.lang.reflect.Modifier;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
+import org.objectweb.asm.Type;
 
 class HiddenProxyDetails {
 
@@ -35,133 +41,88 @@ class HiddenProxyDetails {
     return lookupClass.getName().replace('.', '/') + "$$HiddenProxy";
   }
 
-  static byte[] generateProxyByteArray(Class<?> lookupClass, Class<?> interfaceType, Class<?> delegateClass)
-      throws IOException {
+  private static void generateMethod(ClassWriter writer, String interfaceName, Type delegate, String proxyName, String name, String descriptor) {
+    var mv = writer.visitMethod(ACC_PUBLIC, name, descriptor, null, null);
+    mv.visitCode();
+    mv.visitVarInsn(ALOAD, 0);
+
+    if (delegate != null) {
+      mv.visitVarInsn(ALOAD, 0);
+      mv.visitFieldInsn(GETFIELD, proxyName, "delegate", delegate.getDescriptor());
+    }
+
+    var slot = 1;
+    var parameterTypes = Type.getArgumentTypes(descriptor);
+    for (var parameterType : parameterTypes) {
+      mv.visitVarInsn(parameterType.getOpcode(ILOAD), slot);
+      slot += parameterType.getSize();
+    }
+
+    mv.visitInvokeDynamicInsn(name,
+        "(L" + HIDDEN_PROXY_NAME + ';' + (delegate == null? "": delegate.getDescriptor()) + descriptor.substring(1),
+        BSM, Type.getType("(L" + interfaceName + ";" + descriptor.substring(1)));
+
+    mv.visitInsn(Type.getReturnType(descriptor).getOpcode(IRETURN));
+    mv.visitMaxs(0, 0);
+    mv.visitEnd();
+  }
+
+  static byte[] generateProxyByteArray(Class<?> lookupClass, Class<?> interfaceType, Class<?> delegateClass) {
     var proxyName = proxyName(lookupClass);
     var delegate = delegateClass == void.class? null: Type.getType(delegateClass);
     var interfaceName = interfaceType.getName().replace('.', '/');
-    var resourceName = "/" + interfaceName + ".class";
-    var source = interfaceType.getResourceAsStream(resourceName);
-    var reader = new ClassReader(source);
-    var writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
-    reader.accept(new ClassVisitor(ASM8, writer) {
-      @Override
-      public void visit(int version, int access, String name, String signature, String superName,
-          String[] interfaces) {
-        super.visit(V15, ACC_PUBLIC | ACC_FINAL | ACC_SUPER, proxyName, signature,
-            "java/lang/Object",
-            new String[]{interfaceName, HIDDEN_PROXY_NAME});
+
+    var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+    writer.visit(V15, ACC_PUBLIC | ACC_FINAL | ACC_SUPER, proxyName, null,
+        "java/lang/Object",
+        new String[]{interfaceName, HIDDEN_PROXY_NAME});
+
+    if (delegate != null) {
+      var fv = writer.visitField(ACC_PRIVATE | ACC_FINAL, "delegate", delegate.getDescriptor(), null, null);
+      fv.visitEnd();
+    }
+
+    // add an empty constructor
+    var init = writer.visitMethod(ACC_PRIVATE, "<init>", delegate == null? "()V": "(" + delegate.getDescriptor() + ")V", null, null);
+    init.visitCode();
+    init.visitVarInsn(ALOAD, 0);
+    init.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+    if (delegate != null) {
+      init.visitVarInsn(ALOAD, 0);
+      init.visitVarInsn(delegate.getOpcode(ILOAD), 1);
+      init.visitFieldInsn(PUTFIELD, proxyName, "delegate", delegate.getDescriptor());
+    }
+    init.visitInsn(RETURN);
+    init.visitMaxs(0, 0);
+    init.visitEnd();
+
+    // add Object methods
+    generateMethod(writer, interfaceName, delegate, proxyName, "equals", "(Ljava/lang/Object;)Z");
+    generateMethod(writer, interfaceName, delegate, proxyName, "hashCode", "()I");
+    generateMethod(writer, interfaceName, delegate, proxyName, "toString", "()Ljava/lang/String;");
+
+    for(var method: interfaceType.getMethods()) {
+      if (!Modifier.isAbstract(method.getModifiers())) {   // filter out static or default method
+        continue;
       }
 
-      @Override
-      public void visitSource(String source, String debug) {
-        // empty
+      var methodName = method.getName();
+      var descriptor = methodType(method.getReturnType(), method.getParameterTypes())
+          .toMethodDescriptorString();
+
+      if (switch(methodName) {
+          case "equals" -> descriptor.equals("(Ljava/lang/Object;)Z");
+          case "hashCode" -> descriptor.equals("()I");
+          case "toString" -> descriptor.equals("()Ljava/lang/String;");
+          default -> false;
+        }) {
+        continue; // skip Object methods already generated
       }
 
-      @Override
-      public void visitInnerClass(String name, String outerName, String innerName, int access) {
-        // empty
-      }
+      generateMethod(writer, interfaceName, delegate, proxyName, methodName, descriptor);
+    }
 
-      @Override
-      public void visitOuterClass(String owner, String name, String descriptor) {
-        // empty
-      }
-
-      @Override
-      public void visitNestHost(String nestHost) {
-        // empty
-      }
-
-      @Override
-      public void visitNestMember(String nestMember) {
-        // empty
-      }
-
-      @Override
-      public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-        return null;
-      }
-
-      @Override
-      public AnnotationVisitor visitTypeAnnotation(int typeRef, TypePath typePath,
-          String descriptor, boolean visible) {
-        return null;
-      }
-
-      @Override
-      public void visitAttribute(Attribute attribute) {
-        // empty
-      }
-
-      @Override
-      public FieldVisitor visitField(int access, String name, String descriptor, String signature,
-          Object value) {
-        return null;
-      }
-
-      @Override
-      public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
-          String[] exceptions) {
-        if ((access & ACC_ABSTRACT) == 0) { // static or default method
-          return null;
-        }
-        var mv = super.visitMethod(ACC_PUBLIC, name, descriptor, null, exceptions);
-        mv.visitCode();
-        mv.visitVarInsn(ALOAD, 0);
-
-        if (delegate != null) {
-          mv.visitVarInsn(ALOAD, 0);
-          mv.visitFieldInsn(GETFIELD, proxyName, "delegate", delegate.getDescriptor());
-        }
-
-        var slot = 1;
-        var parameterTypes = Type.getArgumentTypes(descriptor);
-        for (var parameterType : parameterTypes) {
-          mv.visitVarInsn(parameterType.getOpcode(ILOAD), slot);
-          slot += parameterType.getSize();
-        }
-
-        mv.visitInvokeDynamicInsn(name,
-            "(L" + HIDDEN_PROXY_NAME + ';' + (delegate == null? "": delegate.getDescriptor()) + descriptor.substring(1),
-            BSM, Type.getType("(L" + interfaceName + ";" + descriptor.substring(1)));
-
-        mv.visitInsn(Type.getReturnType(descriptor).getOpcode(IRETURN));
-        mv.visitMaxs(0, 0);
-        mv.visitEnd();
-        return null;
-      }
-
-      @Override
-      public void visitEnd() {
-        // add delegate
-        if (delegate != null) {
-          var fv = super.visitField(ACC_PRIVATE | ACC_FINAL, "delegate", delegate.getDescriptor(), null, null);
-          fv.visitEnd();
-        }
-
-        // add an empty constructor
-        var init = super.visitMethod(ACC_PRIVATE, "<init>", delegate == null? "()V": "(" + delegate.getDescriptor() + ")V", null, null);
-        init.visitCode();
-        init.visitVarInsn(ALOAD, 0);
-        init.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
-        if (delegate != null) {
-          init.visitVarInsn(ALOAD, 0);
-          init.visitVarInsn(delegate.getOpcode(ILOAD), 1);
-          init.visitFieldInsn(PUTFIELD, proxyName, "delegate", delegate.getDescriptor());
-        }
-        init.visitInsn(RETURN);
-        init.visitMaxs(0, 0);
-        init.visitEnd();
-
-        // add Object methods
-        visitMethod(ACC_PUBLIC | ACC_ABSTRACT, "equals", "(Ljava/lang/Object;)Z", null, null);
-        visitMethod(ACC_PUBLIC | ACC_ABSTRACT, "hashCode", "()I", null, null);
-        visitMethod(ACC_PUBLIC | ACC_ABSTRACT, "toString", "()Ljava/lang/String;", null, null);
-        super.visitEnd();
-      }
-    }, ClassReader.SKIP_CODE);
-
+    writer.visitEnd();
     return writer.toByteArray();
   }
 }

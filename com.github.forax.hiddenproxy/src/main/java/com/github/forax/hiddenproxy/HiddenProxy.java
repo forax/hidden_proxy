@@ -5,7 +5,6 @@ import static java.lang.invoke.MethodHandles.Lookup.ClassOption.STRONG;
 import static java.lang.invoke.MethodType.methodType;
 import static java.util.Objects.requireNonNull;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles.Lookup;
@@ -18,22 +17,23 @@ import java.util.stream.Stream;
 /**
  * Allow to dynamically define a {@link Class#isHidden() hidden class}, a proxy, that implement an
  * interface.
- * <p>
- * This class is a replacement of {@link java.lang.reflect.Proxy#newProxyInstance(ClassLoader,
+ *
+ * <p>This class is a replacement of {@link java.lang.reflect.Proxy#newProxyInstance(ClassLoader,
  * Class[], InvocationHandler)} with the following characteristics
+ *
  * <ol>
  *   <li>The generated proxy is far faster than {@link java.lang.reflect.Proxy} using invokedynamic
  *       and method handles instead of plain old call and {@link java.lang.reflect.Method}.
- *   <li>Unlike {@link java.lang.reflect.Proxy}, the linker is called once per abstract method
- *       and not once for each call.
+ *   <li>Unlike {@link java.lang.reflect.Proxy}, the linker is called once per abstract method and
+ *       not once for each call.
  *   <li>Unlike {@link java.lang.reflect.Proxy}, it's up to the user code to cache the constructor
- *       provided by {@link #defineProxy(Lookup, Class, Class, InvocationLinker, ProxyOption...)}
- *       if necessary, this implementation doesn't keep the constructor in a cache.
- *   li>Unlike {@link java.lang.reflect.Proxy}, the generated proxy has one field (the delegate)
- *       so you can delegate method calls to another object.
- *   <li>Unlike {@link java.lang.reflect.Proxy}, the proxy class is created as a hidden class in
- *       the same package as the lookup class so if the interface has to be visible by the lookup
- *       class otherwise it will fail.
+ *       provided by {@link #defineProxy(Lookup, Class, Class, InvocationLinker, ProxyOption...)} if
+ *       necessary, this implementation doesn't keep the constructor in a cache. li>Unlike {@link
+ *       java.lang.reflect.Proxy}, the generated proxy has one field (the delegate) so you can
+ *       delegate method calls to another object.
+ *   <li>Unlike {@link java.lang.reflect.Proxy}, the proxy class is created as a hidden class in the
+ *       same package as the lookup class so if the interface has to be visible by the lookup class
+ *       otherwise it will fail.
  * </ol>
  *
  * @see #defineProxy(Lookup, Class, Class, InvocationLinker, ProxyOption...)
@@ -54,21 +54,20 @@ public interface HiddenProxy {
      * must be the {@link MethodHandleInfo#getMethodType() type of the method info} with the type of
      * the interface and the delegate {@link java.lang.invoke.MethodType#insertParameterTypes(int,
      * Class[]) inserted} at the position 0 and 1.
-     * <p>
-     * By example, to link {@link Object#equals(Object)} of an interface {@code Foo} with no delegate,
-     * the method info type is {@code (Object)boolean} and the type of the target method is
-     * {@code (Fun, Object)boolean}.
-     * <p>
-     * To link {@link Object#hashCode()} of an interface {@code Foo} with a {@code String} as
-     * delegate, the method info type is {@code ()int} and the type of the target method is
-     * {@code (Fun, String)int}.
      *
-     * @param lookup     a lookup object representing the proxy class.
+     * <p>By example, to link {@link Object#equals(Object)} of an interface {@code Foo} with no
+     * delegate, the method info type is {@code (Object)boolean} and the type of the target method
+     * is {@code (Fun, Object)boolean}.
+     *
+     * <p>To link {@link Object#hashCode()} of an interface {@code Foo} with a {@code String} as
+     * delegate, the method info type is {@code ()int} and the type of the target method is {@code
+     * (Fun, String)int}.
+     *
+     * @param lookup a lookup object representing the proxy class.
      * @param methodInfo a description of the interface method to implement.
      * @return a method handle (the target) that will be called each time the method of the proxy is
-     * called.
+     *     called.
      * @throws ReflectiveOperationException if any reflective operation fails.
-     *
      * @see Lookup
      * @see java.lang.invoke.MethodHandles
      */
@@ -118,43 +117,45 @@ public interface HiddenProxy {
   /**
    * Defines a proxy class in the same package as the lookup that implements an interface and return
    * a constructor to create objects os that interface.
-   * <p>
-   * The first time an abstract method of the interface is called on the proxy class, the {@link
+   *
+   * <p>The first time an abstract method of the interface is called on the proxy class, the {@link
    * InvocationLinker linker} will be called to provide an implementation of that abstract method.
    * All subsequent calls of the same method will always use the implementation provided by the
    * linker.
-   * <p>
-   * By default, the proxy class is garbage collectable if there is no live instance of the proxy
+   *
+   * <p>By default, the proxy class is garbage collectable if there is no live instance of the proxy
    * class, so the proxy class is not linked to a peculiar class loader. The option {@link
    * ProxyOption#REGISTER_IN_CLASSLOADER} can be used to associate the proxy class to the class
    * loader of the lookup class.
-   * <p>
-   * Usage
+   *
+   * <p>Usage
+   *
    * <pre>
    * var constructor = HiddenProxy.defineProxy(MethodHandles.lookup(), Foo.class, linker);
    * var proxy = (Foo)constructor.invoke();
    * </pre>
    *
-   * @param lookup        the lookup that will be used to create the hidden class, the lookup must
-   *                      have {@link Lookup#hasFullPrivilegeAccess() full privilege access}.
+   * @param lookup the lookup that will be used to create the hidden class, the lookup must have
+   *     {@link Lookup#hasFullPrivilegeAccess() full privilege access}.
    * @param interfaceType the interface to implement by the proxy class.
    * @param delegateClass class of the delegate object, it can be void.class if no delegate is
-   *                      needed.
-   * @param linker        the linker that will be used to find the implementations of the abstract
-   *                      methods.
-   * @param proxyOptions  the only option available is {@link ProxyOption#REGISTER_IN_CLASSLOADER}
-   *                      that ask the proxy class to be associated to a classloader of the lookup
-   *                      class.
+   *     needed.
+   * @param linker the linker that will be used to find the implementations of the abstract methods.
+   * @param proxyOptions the only option available is {@link ProxyOption#REGISTER_IN_CLASSLOADER}
+   *     that ask the proxy class to be associated to a classloader of the lookup class.
    * @return a method handle on a constructor that can be used to create proxy instances.
-   * @throws NoClassDefFoundError     if the bytecode of the interface is not available. This
-   *                                  restriction may be lifted in the future.
-   * @throws IllegalAccessError       if the lookup has not {@link Lookup#hasFullPrivilegeAccess()
-   *                                  full privilege access}.
+   * @throws NoClassDefFoundError if the bytecode of the interface is not available. This
+   *     restriction may be lifted in the future.
+   * @throws IllegalAccessError if the lookup has not {@link Lookup#hasFullPrivilegeAccess() full
+   *     privilege access}.
    * @throws IllegalArgumentException if {@code interfaceType} is not an interface or there are
-   *                                  several times the same proxy option.
-   * @throws NullPointerException     if any parameter is {@code null}.
+   *     several times the same proxy option.
+   * @throws NullPointerException if any parameter is {@code null}.
    */
-  static MethodHandle defineProxy(Lookup lookup, Class<?> interfaceType, Class<?> delegateClass,
+  static MethodHandle defineProxy(
+      Lookup lookup,
+      Class<?> interfaceType,
+      Class<?> delegateClass,
       InvocationLinker linker,
       ProxyOption... proxyOptions) {
     requireNonNull(lookup);
@@ -167,17 +168,14 @@ public interface HiddenProxy {
     }
     var registerInClassLoader = Set.of(proxyOptions).contains(ProxyOption.REGISTER_IN_CLASSLOADER);
 
-    byte[] byteArray;
-    try {
-      byteArray = HiddenProxyDetails
-          .generateProxyByteArray(lookup.lookupClass(), interfaceType, delegateClass);
-    } catch (IOException e) {
-      throw new NoClassDefFoundError("can not read bytecode of " + interfaceType.getName());
-    }
+    var byteArray =
+        HiddenProxyDetails.generateProxyByteArray(
+            lookup.lookupClass(), interfaceType, delegateClass);
 
-    var hiddenClassOptions = Stream.of(NESTMATE, STRONG)
-        .filter(classOption -> classOption != STRONG || registerInClassLoader)
-        .toArray(ClassOption[]::new);
+    var hiddenClassOptions =
+        Stream.of(NESTMATE, STRONG)
+            .filter(classOption -> classOption != STRONG || registerInClassLoader)
+            .toArray(ClassOption[]::new);
     Lookup hiddenClassLookup;
     try {
       hiddenClassLookup = lookup.defineHiddenClass(byteArray, true, hiddenClassOptions);
@@ -186,11 +184,13 @@ public interface HiddenProxy {
     }
 
     var hiddenClass = hiddenClassLookup.lookupClass();
+    var constructorReturnType =
+        delegateClass == void.class
+            ? methodType(void.class)
+            : methodType(void.class, delegateClass);
     RT.handshake(hiddenClass, linker);
     try {
-      return hiddenClassLookup.findConstructor(hiddenClass,
-          delegateClass == void.class ? methodType(void.class)
-              : methodType(void.class, delegateClass));
+      return hiddenClassLookup.findConstructor(hiddenClass, constructorReturnType);
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new AssertionError(e);
     }
