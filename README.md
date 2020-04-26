@@ -3,11 +3,8 @@ A simple API that shows how,to use Hidden class to create proxies.
 
 This is a replacement of `java.lang.reflect.Proxy` API of Java using a more modern design leading to must faster proxies implementation. See the javadoc of `HiddenProxy` for more information.
  
-This code is build with Maven and will require Java 15 to run, currently it requires the nestmates branch of the OpenJDK projet Vahalla because the Hidden class API [JEP 371](https://openjdk.java.net/jeps/371) has not yet being integrated.
-
-Here are pre-compiled versions of the JDK 15 with the Hidden Class API
-- linux : https://github.com/forax/java-next/releases/download/untagged-f3c3bf2d93bb686c17a1/jdk-15-nestmates-linux.tar.gz
-- macOs : https://github.com/forax/java-next/releases/download/untagged-f3c3bf2d93bb686c17a1/jdk-15-nestmates-osx.tar.gz
+This code is is using the Hidden Class API [JEP 371](https://openjdk.java.net/jeps/371) that was introduced in java 15,
+so it requires Java 15 to run.
 
 ## Example
 
