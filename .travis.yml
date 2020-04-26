@@ -6,10 +6,6 @@ cache:
     - $HOME/.m2
 
 before_install:
-  - wget https://github.com/forax/java-next/releases/download/untagged-f3c3bf2d93bb686c17a1/jdk-15-nestmates-linux.tar.gz
-  - tar zxvf jdk-15-nestmates-linux.tar.gz
-  - export JAVA_HOME=`pwd`/jdk-15-nestmates
-  - export PATH=$JAVA_HOME/bin:$PATH
   - java -version
 
 install:
