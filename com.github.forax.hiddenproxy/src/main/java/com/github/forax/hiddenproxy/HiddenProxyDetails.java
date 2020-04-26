@@ -38,7 +38,7 @@ class HiddenProxyDetails {
       false);
   private static final String HIDDEN_PROXY_NAME = HiddenProxy.class.getName().replace('.', '/');
 
-  static String proxyName(Class<?> lookupClass) {
+  private static String proxyName(Class<?> lookupClass) {
     return lookupClass.getName().replace('.', '/') + "$$HiddenProxy";
   }
 
