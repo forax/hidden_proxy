@@ -25,18 +25,15 @@ Then the first time an abstract method of the interface is called, here when cal
 The `implementation` is called with the field stored inside the proxy as first argument followed by the arguments of the abstract method.
 ```java
   Lookup lookup = MethodHandles.lookup();
+  MethodHandle impl =  lookup.findStatic(Impl.class, "impl", methodType(String.class, int.class, String.class));
   Proxy.Linker linker = methodInfo -> switch(methodInfo.getName()) {
-    case "hello" -> MethodHandles.dropArguments(
-        lookup.findStatic(Impl.class,
-                          "implementation",
-                          methodType(String.class, int.class, String.class)),
-        0, HelloProxy.class);
+    case "hello" -> MethodHandles.dropArguments(impl, 0, HelloProxy.class);
     default -> fail("unknown method " + methodInfo);
   };
   Lookup proxyLookup = Proxy.defineProxy(lookup,
-    new Class<?>[] { HelloProxy.class },
-    __ -> false,
-    int.class,
+    new Class<?>[] { HelloProxy.class },   // proxy interfaces
+    __ -> false,                           // don't override toString, equals and hashCode
+    int.class,                             // proxy field
     linker);
   MethodHandle constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(),
                                                          methodType(void.class, int.class));

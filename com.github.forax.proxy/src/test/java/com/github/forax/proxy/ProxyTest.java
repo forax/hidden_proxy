@@ -128,16 +128,15 @@ public class ProxyTest {
       String hello(String text);
     }
     class Impl {
-      static String implementation(int repeated, String text) {
+      static String impl(int repeated, String text) {
         return text.repeat(repeated);
       }
     }
 
     Lookup lookup = MethodHandles.lookup();
+    MethodHandle impl =  lookup.findStatic(Impl.class, "impl", methodType(String.class, int.class, String.class));
     Proxy.Linker linker = methodInfo -> switch(methodInfo.getName()) {
-        case "hello" -> MethodHandles.dropArguments(
-            lookup.findStatic(Impl.class, "implementation", methodType(String.class, int.class, String.class)),
-            0, HelloProxy.class);
+        case "hello" -> MethodHandles.dropArguments(impl, 0, HelloProxy.class);
         default -> fail("unknown method " + methodInfo);
     };
     Lookup proxyLookup = Proxy.defineProxy(lookup, new Class<?>[] { HelloProxy.class }, __ -> false, int.class, linker);
