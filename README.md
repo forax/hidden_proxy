@@ -27,12 +27,19 @@ The `implementation` is called with the field stored inside the proxy as first a
   Lookup lookup = MethodHandles.lookup();
   Proxy.Linker linker = methodInfo -> switch(methodInfo.getName()) {
     case "hello" -> MethodHandles.dropArguments(
-        lookup.findStatic(Impl.class, "implementation", methodType(String.class, int.class, String.class)),
+        lookup.findStatic(Impl.class,
+                          "implementation",
+                          methodType(String.class, int.class, String.class)),
         0, HelloProxy.class);
     default -> fail("unknown method " + methodInfo);
   };
-  Lookup proxyLookup = Proxy.defineProxy(lookup, new Class<?>[] { HelloProxy.class }, __ -> false, int.class, linker);
-  MethodHandle constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(), methodType(void.class, int.class));
+  Lookup proxyLookup = Proxy.defineProxy(lookup,
+    new Class<?>[] { HelloProxy.class },
+    __ -> false,
+    int.class,
+    linker);
+  MethodHandle constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(),
+                                                         methodType(void.class, int.class));
   HelloProxy proxy = (HelloProxy) constructor.invoke(2);
   assertEquals("proxyproxy", proxy.hello("proxy"));
 ```
