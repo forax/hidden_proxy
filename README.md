@@ -20,9 +20,16 @@ Let say we have an interface `HelloProxy` with an abstract method `hello` and a 
   }
 ```
 
-The method `Proxy.defineProxy(lookup, interfaces, overriden, field type, linker)` let you dynamically create a class that implements the interface `HelloProxy` with a field (here an int). The return value of `defineProxy` is a lookup you can use to find the constructor and invoke it invoke with the value of the field.
-Then the first time an abstract method of the interface is called, here when calling `proxy.hello("proxy")`, the linker is called to ask how the abstract method should be implemented. Here the linker will find the `implementation` and discard (using `dropArguments`) the first argument (the proxy) before calling the `implementation`.
-The `implementation` is called with the field stored inside the proxy as first argument followed by the arguments of the abstract method.
+The method `Proxy.defineProxy(lookup, interfaces, overriden, field, linker)` let you dynamically create a class
+that implements the interface `HelloProxy` with a field (here an int).
+The return value of `defineProxy` is a lookup you can use to find the constructor and
+invoke it invoke with the value of the field.
+Then the first time an abstract method of the interface is called, here when calling `proxy.hello("proxy")`,
+the linker is called to ask how the abstract method should be implemented.
+Here the linker will use the method `impl` and discard (using `dropArguments`) the first argument (the proxy)
+before calling the method `impl`.
+So when calling the method `hello`, the method `impl` will be called with the field stored inside the proxy
+as first argument followed by the arguments of the method `hello``.
 ```java
   Lookup lookup = MethodHandles.lookup();
   MethodHandle impl =  lookup.findStatic(Impl.class, "impl",
