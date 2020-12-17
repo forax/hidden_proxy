@@ -19,7 +19,7 @@ jobs:
           java-version: ${{ matrix.java }}
       - name: install
         run: |
-          - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
       - name: build
         run: |
           mvn package
