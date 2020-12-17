@@ -1,10 +1,10 @@
 # hidden_proxy
 A simple API that shows how,to use Hidden class to create proxies.
 
-This is a replacement of `java.lang.reflect.Proxy` API of Java using a more modern design leading to must faster proxies implementation. See the javadoc of `HiddenProxy` for more information.
+This is a replacement of `java.lang.reflect.Proxy` API of Java using a more modern design leading to must faster proxies implementation. See the javadoc of `Proxy` for more information.
  
-This code is is using the Hidden Class API [JEP 371](https://openjdk.java.net/jeps/371) that was introduced in java 15,
-so it requires Java 15 to run.
+This code is using the Hidden Class API [JEP 371](https://openjdk.java.net/jeps/371) that was introduced in java 15,
+so it requires Java 16 to run.
 
 ## Example
 
@@ -20,21 +20,22 @@ Let say we have an interface `HelloProxy` with an abstract method `hello` and a 
   }
 ```
 
-The method `HiddenProxy.defineProxy(lookup, interface, field type, linker)` let you dynamically create a class that implements the interface `HelloProxy` with a field (here an int). The return value of `defineProxy` is a constructor you can invoke with the value of the field.
-Then the first time an abstract method of the interface is called, here when calling `proxy.hello("proxy")`, the linker is called to ask how the abstract method should be implemented. Here we lookup for `implementation` and discard (using `dropArguments`) the first argument (the proxy) before calling `implementation`. The `implementation` is called with the field stored inside the proxy as first argument followed by the arguments of the abstract method.
+The method `Proxy.defineProxy(lookup, interfaces, overriden, field type, linker)` let you dynamically create a class that implements the interface `HelloProxy` with a field (here an int). The return value of `defineProxy` is a lookup you can use to find the constructor and invoke it invoke with the value of the field.
+Then the first time an abstract method of the interface is called, here when calling `proxy.hello("proxy")`, the linker is called to ask how the abstract method should be implemented. Here the linker will find the `implementation` and discard (using `dropArguments`) the first argument (the proxy) before calling the `implementation`.
+The `implementation` is called with the field stored inside the proxy as first argument followed by the arguments of the abstract method.
 ```java
-  var linker = (InvocationLinker)(lookup, methodInfo) -> {
-      return switch(methodInfo.getName()) {
-        case "hello" -> MethodHandles.dropArguments(
-            lookup.findStatic(Impl.class, "implementation", methodType(String.class, int.class, String.class)),
-            0, HelloProxy.class);
-        default -> fail("unknown method " + methodInfo);
-      };
-    };
-  var constructor = HiddenProxy.defineProxy(MethodHandles.lookup(), HelloProxy.class, int.class, linker);
-  var proxy = (HelloProxy)constructor.invoke(2);
+  Lookup lookup = MethodHandles.lookup();
+  Proxy.Linker linker = methodInfo -> switch(methodInfo.getName()) {
+    case "hello" -> MethodHandles.dropArguments(
+        lookup.findStatic(Impl.class, "implementation", methodType(String.class, int.class, String.class)),
+        0, HelloProxy.class);
+    default -> fail("unknown method " + methodInfo);
+  };
+  Lookup proxyLookup = Proxy.defineProxy(lookup, new Class<?>[] { HelloProxy.class }, __ -> false, int.class, linker);
+  MethodHandle constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(), methodType(void.class, int.class));
+  HelloProxy proxy = (HelloProxy) constructor.invoke(2);
   assertEquals("proxyproxy", proxy.hello("proxy"));
 ```
 
-If you want more examples, you can take a look to the test class `HiddenProxyTest`.
+If you want more examples, you can take a look to the test class `ProxyTest`.
 

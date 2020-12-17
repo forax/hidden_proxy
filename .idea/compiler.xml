@@ -6,12 +6,17 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="com.github.forax.hiddenproxy" />
+        <module name="com.github.forax.proxy" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="com.github.forax.hiddenproxy" target="15" />
+      <module name="com.github.forax.proxy" target="16" />
       <module name="hidden_proxy" target="1.5" />
     </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="com.github.forax.proxy" options="--enable-preview" />
+    </option>
   </component>
 </project>

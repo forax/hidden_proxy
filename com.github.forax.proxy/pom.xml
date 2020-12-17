@@ -5,8 +5,8 @@
 
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.github.forax.hiddenproxy</groupId>
-  <artifactId>com.github.forax.hiddenproxy</artifactId>
+  <groupId>com.github.forax.proxy</groupId>
+  <artifactId>com.github.forax.proxy</artifactId>
   <version>1.0-SNAPSHOT</version>
 
   <properties>
@@ -17,19 +17,19 @@
     <dependency>
       <groupId>org.ow2.asm</groupId>
       <artifactId>asm</artifactId>
-      <version>8.0.1</version>
+      <version>9.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
-      <version>5.6.0</version>
+      <version>5.7.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-engine</artifactId>
-      <version>5.6.0</version>
+      <version>5.7.0</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -41,17 +41,20 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.8.1</version>
         <configuration>
-          <release>15</release>
+          <release>16</release>
+          <compilerArgs>
+            <compilerArg>--enable-preview</compilerArg>
+          </compilerArgs>
         </configuration>
       </plugin>
 
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.0.0-M4</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-failsafe-plugin</artifactId>
-        <version>3.0.0-M4</version>
+        <version>3.0.0-M5</version>
+        <configuration>
+          <argLine>--enable-preview</argLine>
+        </configuration>
       </plugin>
 
     </plugins>
