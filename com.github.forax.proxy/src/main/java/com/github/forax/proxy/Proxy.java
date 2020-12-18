@@ -11,6 +11,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -57,9 +58,9 @@ public class Proxy {
    * @param delegateClass the class of the delegate field inside the proxy or void.class if there is no field.
    * @param linker the linker that will resolve the calls to the proxy methods.
    * @return a new proxy class that implements the interfaces.
-   * @throws IllegalAccessException – if this Lookup does not have full privilege access
-   * @throws SecurityException – if a security manager is present and it refuses access
-   * @throws NullPointerException – if any parameter is null
+   * @throws IllegalAccessException if this Lookup does not have full privilege access
+   * @throws SecurityException if a security manager is present and it refuses access
+   * @throws NullPointerException if any parameter is null
    */
   public static Lookup defineProxy(Lookup lookup, Class<?>[] interfaces, Predicate<Method> shouldOverride, Class<?> delegateClass, Linker linker) throws IllegalAccessException {
     Objects.requireNonNull(lookup);
@@ -120,7 +121,8 @@ public class Proxy {
       }
       var isInterface = method.getDeclaringClass().isInterface(); // it can be java/lang/Object
       var methodHandle = new Handle(isInterface? H_INVOKEINTERFACE: H_INVOKEVIRTUAL, method.getDeclaringClass().getName().replace('.', '/'), method.getName(), descriptor, isInterface);
-      var indyDesc = "(Ljava/lang/Object;" + (delegateClass == void.class? "": delegateClass.descriptorString()) + descriptor.substring(1);
+      var proxyType = Arrays.stream(interfaces).findFirst().map(Class::descriptorString).orElse("Ljava/lang/Object;");
+      var indyDesc = '(' + proxyType + (delegateClass == void.class? "": delegateClass.descriptorString()) + descriptor.substring(1);
       mv.visitInvokeDynamicInsn(method.getName(), indyDesc, BSM, methodHandle);
       mv.visitInsn(Type.getReturnType(descriptor).getOpcode(IRETURN));
       mv.visitMaxs(-1, -1);
@@ -144,6 +146,18 @@ public class Proxy {
     var info = lookup.revealDirect(mh);
     var linker = MethodHandles.classData(lookup, "_", Linker.class);
     var target = linker.resolve(info);
-    return new ConstantCallSite(target.asType(methodType));
+    if (target == null) {
+      Objects.requireNonNull(target, "linker " + linker.getClass().getSimpleName() + " returned function is null for proxy method " + info);
+    }
+    try {
+      target = target.asType(methodType);
+    } catch(WrongMethodTypeException e) {
+      String detail = "";
+      if (target.type().parameterCount() != methodType.parameterCount()) {
+        detail = ", maybe it's because the first parameter is not a type compatible with the proxy type ?";
+      }
+      throw new LinkageError("error for linker " + linker.getClass().getSimpleName() + " while trying to link proxy method " + info + detail, e);
+    }
+    return new ConstantCallSite(target);
   }
 }
