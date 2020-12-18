@@ -14,6 +14,7 @@ import java.util.function.IntSupplier;
 import static java.lang.invoke.MethodHandles.constant;
 import static java.lang.invoke.MethodHandles.dropArguments;
 import static java.lang.invoke.MethodHandles.empty;
+import static java.lang.invoke.MethodHandles.identity;
 import static java.lang.invoke.MethodType.methodType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -143,5 +144,20 @@ public class ProxyTest {
     MethodHandle constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(), methodType(void.class, int.class));
     HelloProxy proxy = (HelloProxy) constructor.invoke(2);
     assertEquals("proxyproxy", proxy.hello("proxy"));
+  }
+
+  @Test
+  public void exactProxyType() throws Throwable {
+    interface Foo {
+      int bar(int value);
+    }
+
+    var lookup = MethodHandles.lookup();
+    var linker = (Proxy.Linker) methodInfo -> dropArguments(identity(int.class), 0, Foo.class);
+    var proxyLookup = Proxy.defineProxy(lookup, new Class<?>[] { Foo.class }, __ -> false, void.class, linker);
+    var constructor = proxyLookup.findConstructor(proxyLookup.lookupClass(), methodType(void.class))
+        .asType(methodType(Foo.class));
+    var proxy = (Foo) constructor.invokeExact();
+    assertEquals(42, proxy.bar(42));
   }
 }
