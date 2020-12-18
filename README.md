@@ -14,7 +14,7 @@ Let say we have an interface `HelloProxy` with an abstract method `hello` and a 
     String hello(String text);
   }
   static class Impl {
-    static String implementation(int repeated, String text) {
+    static String impl(int repeated, String text) {
       return text.repeat(repeated);
     }
   }
