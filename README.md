@@ -32,8 +32,8 @@ So when calling the method `hello`, the method `impl` will be called with the fi
 as first argument followed by the arguments of the method `hello``.
 ```java
   Lookup lookup = MethodHandles.lookup();
-  MethodHandle impl =  lookup.findStatic(Impl.class, "impl",
-                                         methodType(String.class, int.class, String.class));
+  MethodHandle impl = lookup.findStatic(Impl.class, "impl",
+                                        methodType(String.class, int.class, String.class));
   Proxy.Linker linker = methodInfo -> switch(methodInfo.getName()) {
     case "hello" -> MethodHandles.dropArguments(impl, 0, HelloProxy.class);
     default -> fail("unknown method " + methodInfo);
